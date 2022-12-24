@@ -53,8 +53,19 @@ public:
     void addTile(Tile tile) {
         m_tiles[tile.x].emplace(tile.y, tile);
     }
-    int distance(Tile t1, Tile t2, const vector<Tile> & additional = vector<Tile>()) const {
-        return abs(t2.x - t1.x) + abs(t2.y - t1.y);
+    float distance(Tile t1, Tile t2, const vector<Tile> & additional = vector<Tile>()) const {
+        int dist = abs(t2.x - t1.x) + abs(t2.y - t1.y);
+        if (!additional.empty()) {
+            int closest = max_distance();
+            for (auto tile : additional) {
+                int d = distance(t2, tile);
+                if (d < closest)
+                    closest = d;
+            }
+            return closest * 1. / max_distance() + dist;
+        }
+
+        return dist;
     }
     int number(Tile t) const {
         return t.x * width + t.y;
@@ -79,8 +90,8 @@ public:
 
     int width;
     int height;
-    int max_distance() { return width + height; }
-    int size() { return width * height; }
+    int max_distance() const { return width + height; }
+    int size() const { return width * height; }
 private:
     map<int /*x*/, map<int /*y*/, Tile>> m_tiles;
 };
@@ -262,7 +273,7 @@ int main()
                 break;
         }
 
-        multimap<int /* distance */, pair<int /*source*/, int /* target*/>> to_move;
+        multimap<float /* distance */, pair<int /*source*/, int /* target*/>> to_move;
         for (Tile tile : my_units) {
             int dist_enemy = board.max_distance();
             Tile closest_enemy;
@@ -273,7 +284,7 @@ int main()
             int dist_neutral = board.max_distance();
             Tile closest_neutral;
             for (auto t : neutral_tiles) {
-                to_move.emplace(board.distance(tile, t), make_pair(board.number(tile), board.number(t)));
+                to_move.emplace(board.distance(tile, t, opp_units), make_pair(board.number(tile), board.number(t)));
             }
         }
 
