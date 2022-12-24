@@ -243,10 +243,10 @@ int main()
         multimap<float, Tile> to_spawn;
         multimap<int, Tile> to_build;
         for (auto tile : my_tiles) {
-            if (tile.can_spawn)
+            if (tile.can_spawn && !(tile.in_range_of_recycler && tile.scrap_amount == 1))
                 to_spawn.emplace(tiles_togo_count(tile), tile);
 
-            if (tile.can_build)
+            if (tile.can_build && !(tile.in_range_of_recycler && tile.scrap_amount == 1))
                 to_build.emplace(tiles_enemy_count(tile), tile);
         }
 
@@ -280,6 +280,8 @@ int main()
 
         multimap<float /* distance */, pair<int /*source*/, int /* target*/>> to_move;
         for (Tile tile : my_units) {
+            if (tile.in_range_of_recycler && tile.scrap_amount == 1) continue;
+
             int dist_enemy = board.max_distance();
             Tile closest_enemy;
             for (auto t : opp_tiles) {
