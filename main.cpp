@@ -35,6 +35,9 @@ struct Tile {
     bool operator==(Tile other) const {
         return this->x == other.x && this->y == other.y;
     }
+    bool has_enemy_units() const {
+        return this->owner == OPP && this->units > 0;
+    }
 };
 // class for hash function
 class MyHashFunction {
@@ -204,35 +207,37 @@ int main()
         };
 
         auto tiles_enemy_count = [&board](Tile tile){
-            vector<pair<int, int>> next_coords;
-            Tile t1 = board.tile(tile.x - 1, tile.y);
-            Tile t2 = board.tile(tile.x, tile.y - 1);
-            Tile t3 = board.tile(tile.x + 1, tile.y);
-            Tile t4 = board.tile(tile.x, tile.y + 1);
+            vector<Tile> to_check;
 
-            if (t1.owner == ME) {
-                if (t2.owner == OPP && t2.units > 0) return 0;
-                if (t4.owner == OPP && t4.units > 0) return 0;
-                if (!(t3.owner == OPP && t3.units > 0)) return 0;
-                return t3.units;
+            auto index = [](int i) {
+                if (i > 3) return i - 4;
+                else if (i < 0) return i + 4;
+                else return i;
+            };
+
+            to_check.emplace_back(board.tile(tile.x - 1, tile.y));
+            to_check.emplace_back(board.tile(tile.x, tile.y - 1));
+            to_check.emplace_back(board.tile(tile.x + 1, tile.y));
+            to_check.emplace_back(board.tile(tile.x, tile.y + 1));
+
+            bool has_enemy_units = false;
+            bool has_enemy_units_close = false;
+            for (int i = 0; i < to_check.size(); ++i) {
+                Tile t = to_check.at(i);
+                Tile t_prev = to_check.at(index(i-1));
+                if (t.has_enemy_units()) has_enemy_units = true;
+                if (t_prev.has_enemy_units() && t.has_enemy_units()) return 0;
             }
-            else if (t2.owner == ME) {
-                if (t3.owner == OPP && t3.units > 0) return 0;
-                if (t1.owner == OPP && t1.units > 0) return 0;
-                if (!(t4.owner == OPP && t4.units > 0)) return 0;
-                return t4.units;
-            } else if (t3.owner == ME) {
-                if (t2.owner == OPP && t2.units > 0) return 0;
-                if (t4.owner == OPP && t4.units > 0) return 0;
-                if (!(t1.owner == OPP && t1.units > 0)) return 0;
-                return t1.units;
-            } else if (t4.owner == ME) {
-                if (t3.owner == OPP && t3.units > 0) return 0;
-                if (t1.owner == OPP && t1.units > 0) return 0;
-                if (!(t2.owner == OPP && t2.units > 0)) return 0;
-                return t2.units;
-            } else
-                return 0;
+
+            if (!has_enemy_units) return 0;
+
+            for (int i = 0; i < to_check.size(); ++i) {
+                Tile t = to_check.at(i);
+                Tile t_2 = to_check.at(index(i+2));
+                if (t.has_enemy_units() && t_2.owner == ME) return t.units;
+            }
+
+            return 0;
         };
 
         multimap<float, Tile> to_spawn;
