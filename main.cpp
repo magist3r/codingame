@@ -155,7 +155,7 @@ int main()
 
         vector<string> actions;
 
-        auto tiles_togo_count = [&board](Tile tile){
+        auto tiles_togo_count = [&board, &opp_units](Tile tile) -> float {
             vector<pair<int, int>> next_coords;
             next_coords.emplace_back(tile.x - 1, tile.y);
             next_coords.emplace_back(tile.x + 1, tile.y);
@@ -174,7 +174,7 @@ int main()
                     ++count;
                 }
             }
-            return count;
+            return count + 1 - board.distance(tile, tile, opp_units);
         };
 
         auto tiles_scrap_count = [&board](Tile tile){
@@ -235,7 +235,7 @@ int main()
                 return 0;
         };
 
-        multimap<int, Tile> to_spawn;
+        multimap<float, Tile> to_spawn;
         multimap<int, Tile> to_build;
         for (auto tile : my_tiles) {
             if (tile.can_spawn)
