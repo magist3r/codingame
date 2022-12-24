@@ -18,10 +18,12 @@ static constexpr int OPP = 0;
 static constexpr int NONE = -1;
 
 struct Tile {
-    bool is_empty() { return x == -1 && y == -1; }
+    bool empty() { return x == -1 && y == -1; }
     int x = -1;
     int y = -1;
-    int scrap_amount, owner, units;
+    int scrap_amount = 0;
+    int owner = NONE;
+    int units = 0;
     bool recycler, can_build, can_spawn, in_range_of_recycler, grass;
     ostream& dump(ostream& ioOut) const {
         ioOut << x << " " << y;
@@ -45,42 +47,69 @@ public:
 
 ostream& operator<<(ostream& ioOut, const Tile& obj) { return obj.dump(ioOut); }
 
-int distance(Tile t1, Tile t2) {
-    return abs(t2.x - t1.x) + abs(t2.y - t1.y);
-}
+class Board
+{
+public:
+    void addTile(Tile tile) {
+        m_tiles[tile.x].emplace(tile.y, tile);
+    }
+    int distance(Tile t1, Tile t2, const vector<Tile> & additional = vector<Tile>()) const {
+        return abs(t2.x - t1.x) + abs(t2.y - t1.y);
+    }
+    int number(Tile t) const {
+        return t.x * width + t.y;
+    }
+    Tile tile(int x, int y) const {
+        if (x < 0 || x > width - 1 || y < 0 || y > height - 1) return Tile();
+        return m_tiles.at(x).at(y);
+    }
+    Tile * tilePtr(int x, int y) {
+        if (x < 0 || x > width - 1 || y < 0 || y > height - 1) return nullptr;
+        return &m_tiles.at(x).at(y);
+    }
+    Tile * tile_from_number(int number) {
+        int x = number / width;
+        int y = number % width;
+        return tilePtr(x, y);
+    }
 
-int number(Tile t, int width) {
-    return t.x * width + t.y;
-}
+    void clear() {
+        m_tiles.clear();
+    }
+
+    int width;
+    int height;
+    int max_distance() { return width + height; }
+    int size() { return width * height; }
+private:
+    map<int /*x*/, map<int /*y*/, Tile>> m_tiles;
+};
 
 
 int main()
 {
-    int width;
-    int height;
-    cin >> width >> height; cin.ignore();
+    Board board;
 
-    int max_distance = width + height;
+    cin >> board.width >> board.height; cin.ignore();
 
     // game loop
     while (1) {
         auto start = std::chrono::steady_clock::now();
+        board.clear();
 
         vector<Tile> my_tiles;
-        unordered_map<int, Tile> opp_tiles;
-        unordered_map<int, Tile> neutral_tiles;
+        vector<Tile> opp_tiles;
+        vector<Tile> neutral_tiles;
         vector<Tile> my_units;
         vector<Tile> opp_units;
         vector<Tile> my_recyclers;
         vector<Tile> opp_recyclers;
 
-        map<int /*x*/, map<int /*y*/, Tile>> tiles;
-
         int my_matter;
         int opp_matter;
         cin >> my_matter >> opp_matter; cin.ignore();
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
+        for (int y = 0; y < board.height; y++) {
+            for (int x = 0; x < board.width; x++) {
                 int scrap_amount;
                 int owner; // 1 = me, 0 = foe, -1 = neutral
                 int units;
@@ -90,8 +119,8 @@ int main()
                 int in_range_of_recycler;
                 cin >> scrap_amount >> owner >> units >> recycler >> can_build >> can_spawn >> in_range_of_recycler; cin.ignore();
 
-                Tile tile = {x, y, scrap_amount, owner, units, recycler == 1, can_build == 1, can_spawn == 1, in_range_of_recycler == 1, scrap_amount == 0};
-                tiles[x].emplace(y, tile);
+                Tile tile {x, y, scrap_amount, owner, units, recycler == 1, can_build == 1, can_spawn == 1, in_range_of_recycler == 1, scrap_amount == 0};
+                board.addTile(tile);
 
                 if (tile.owner == ME) {
                     my_tiles.emplace_back(tile);
@@ -101,21 +130,21 @@ int main()
                         my_recyclers.emplace_back(tile);
                     }
                 } else if (tile.owner == OPP) {
-                    opp_tiles.emplace(x * width + y, tile);
+                    opp_tiles.emplace_back(tile);
                     if (tile.units > 0) {
                         opp_units.emplace_back(tile);
                     } else if (tile.recycler) {
                         opp_recyclers.emplace_back(tile);
                     }
                 } else if (tile.scrap_amount > 0) {
-                    neutral_tiles.emplace(x * width + y, tile);
+                    neutral_tiles.emplace_back(tile);
                 }
             }
         }
 
         vector<string> actions;
 
-        auto tiles_togo_count = [&tiles, &width, &height](Tile tile){
+        auto tiles_togo_count = [&board](Tile tile){
             vector<pair<int, int>> next_coords;
             next_coords.emplace_back(tile.x - 1, tile.y);
             next_coords.emplace_back(tile.x + 1, tile.y);
@@ -124,9 +153,9 @@ int main()
 
             int count = 0;
             for (auto coord : next_coords) {
-                if (coord.first >= width || coord.first < 0 || coord.second >= height || coord.second < 0) continue;
+                if (coord.first >= board.width || coord.first < 0 || coord.second >= board.height || coord.second < 0) continue;
 
-                Tile t = tiles.at(coord.first).at(coord.second);
+                Tile t = board.tile(coord.first, coord.second);
 
                 if (!t.grass &&
                     ((t.owner == OPP && !t.recycler)
@@ -137,7 +166,7 @@ int main()
             return count;
         };
 
-        auto tiles_scrap_count = [&tiles, &width, &height](Tile tile){
+        auto tiles_scrap_count = [&board](Tile tile){
             vector<pair<int, int>> next_coords;
             next_coords.emplace_back(tile.x, tile.y);
             next_coords.emplace_back(tile.x - 1, tile.y);
@@ -147,9 +176,9 @@ int main()
 
             int scrap = 0;
             for (auto coord : next_coords) {
-                if (coord.first >= width || coord.first < 0 || coord.second >= height || coord.second < 0) continue;
+                if (coord.first >= board.width || coord.first < 0 || coord.second >= board.height || coord.second < 0) continue;
 
-                Tile t = tiles.at(coord.first).at(coord.second);
+                Tile t = board.tile(coord.first, coord.second);
 
                 if (t.in_range_of_recycler) { // break if any tile is in range of recycler
                     cerr << "in range " << t << endl;
@@ -163,23 +192,36 @@ int main()
             return scrap;
         };
 
-        auto tiles_enemy_count = [&tiles, &width, &height](Tile tile){
+        auto tiles_enemy_count = [&board](Tile tile){
             vector<pair<int, int>> next_coords;
-            next_coords.emplace_back(tile.x - 1, tile.y);
-            next_coords.emplace_back(tile.x + 1, tile.y);
-            next_coords.emplace_back(tile.x, tile.y - 1);
-            next_coords.emplace_back(tile.x, tile.y + 1);
+            Tile t1 = board.tile(tile.x - 1, tile.y);
+            Tile t2 = board.tile(tile.x, tile.y - 1);
+            Tile t3 = board.tile(tile.x + 1, tile.y);
+            Tile t4 = board.tile(tile.x, tile.y + 1);
 
-            int enemies = 0;
-            for (auto coord : next_coords) {
-                if (coord.first >= width || coord.first < 0 || coord.second >= height || coord.second < 0) continue;
-
-                Tile t = tiles.at(coord.first).at(coord.second);
-
-                if (t.owner == OPP && t.units > 0)
-                    enemies += t.units;
+            if (t1.owner == ME) {
+                if (t2.owner == OPP && t2.units > 0) return 0;
+                if (t4.owner == OPP && t4.units > 0) return 0;
+                if (!(t3.owner == OPP && t3.units > 0)) return 0;
+                return t3.units;
             }
-            return enemies;
+            else if (t2.owner == ME) {
+                if (t3.owner == OPP && t3.units > 0) return 0;
+                if (t1.owner == OPP && t1.units > 0) return 0;
+                if (!(t4.owner == OPP && t4.units > 0)) return 0;
+                return t4.units;
+            } else if (t3.owner == ME) {
+                if (t2.owner == OPP && t2.units > 0) return 0;
+                if (t4.owner == OPP && t4.units > 0) return 0;
+                if (!(t1.owner == OPP && t1.units > 0)) return 0;
+                return t1.units;
+            } else if (t4.owner == ME) {
+                if (t3.owner == OPP && t3.units > 0) return 0;
+                if (t1.owner == OPP && t1.units > 0) return 0;
+                if (!(t2.owner == OPP && t2.units > 0)) return 0;
+                return t2.units;
+            } else
+                return 0;
         };
 
         multimap<int, Tile> to_spawn;
@@ -192,7 +234,6 @@ int main()
                 to_build.emplace(tiles_enemy_count(tile), tile);
         }
 
-        int size = width * height;
         if (my_matter >= 10) {
             for (auto it = to_build.rbegin(); it != to_build.rend(); it++) {
                 if (it->first == 0) break;
@@ -223,35 +264,29 @@ int main()
 
         multimap<int /* distance */, pair<int /*source*/, int /* target*/>> to_move;
         for (Tile tile : my_units) {
-            int dist_enemy = max_distance;
+            int dist_enemy = board.max_distance();
             Tile closest_enemy;
-            for (const auto&[index, t] : opp_tiles) {
-                to_move.emplace(distance(t, tile), make_pair(number(tile, width), number(t, width)));
+            for (auto t : opp_tiles) {
+                to_move.emplace(board.distance(tile, t), make_pair(board.number(tile), board.number(t)));
             }
 
-            int dist_neutral = max_distance;
+            int dist_neutral = board.max_distance();
             Tile closest_neutral;
-            for (const auto&[index, t] : neutral_tiles) {
-                to_move.emplace(distance(t, tile), make_pair(number(tile, width), number(t, width)));
+            for (auto t : neutral_tiles) {
+                to_move.emplace(board.distance(tile, t), make_pair(board.number(tile), board.number(t)));
             }
         }
 
         unordered_set<int> used_tiles;
         for (auto it = to_move.begin(); it != to_move.end(); it++) {
+            Tile * source = board.tile_from_number(it->second.first);
+            Tile * target = board.tile_from_number(it->second.second);
 
-            int x_s = it->second.first / width;
-            int y_s = it->second.first % width;
-
-            int x_t = it->second.second / width;
-            int y_t = it->second.second % width;
-            Tile & source = tiles.at(x_s).at(y_s);
-            Tile & target = tiles.at(x_t).at(y_t);
-
-            if (used_tiles.find(it->second.second) == used_tiles.end() && source.units > 0) {
-                int amount = 1; //source.units;
-                source.units -= amount;
+            if (source && target && used_tiles.find(it->second.second) == used_tiles.end() && source->units > 0) {
+                int amount = 1;
+                source->units -= amount;
                 ostringstream action;
-                action << "MOVE " << amount << " " << source << " " << target;
+                action << "MOVE " << amount << " " << *source << " " << *target;
                 actions.emplace_back(action.str());
                 used_tiles.insert(it->second.second);
             }
