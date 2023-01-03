@@ -56,15 +56,22 @@ public:
     void addTile(Tile tile) {
         m_tiles[tile.x].emplace(tile.y, tile);
     }
-    float distance(Tile t1, Tile t2, const vector<Tile> & additional = vector<Tile>()) const {
-        int dist = abs(t2.x - t1.x) + abs(t2.y - t1.y);
+    float distance(Tile source, Tile target, const vector<Tile> & additional = vector<Tile>()) const {
+        int dist = abs(target.x - source.x) + abs(target.y - source.y);
         if (!additional.empty()) {
+            Tile closest_opp{};
             int closest = max_distance();
             for (auto tile : additional) {
-                int d = distance(t2, tile);
-                if (d < closest)
+                int d = distance(target, tile);
+                if (d < closest) {
                     closest = d;
+                    closest_opp = tile;
+                }
             }
+            if (!closest_opp.empty() && abs(closest_opp.x - target.x) > abs(closest_opp.x - source.x)) {
+                return closest * 1. / max_distance() + dist + max_distance();
+            }
+
             return closest * 1. / max_distance() + dist;
         }
 
