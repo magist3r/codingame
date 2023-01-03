@@ -206,7 +206,7 @@ int main()
             return scrap;
         };
 
-        auto tiles_enemy_count = [&board](Tile tile){
+        auto tiles_enemy_count = [&board](Tile tile) -> Tile {
             vector<Tile> to_check;
 
             auto index = [](int i) {
@@ -226,49 +226,64 @@ int main()
                 Tile t = to_check.at(i);
                 Tile t_prev = to_check.at(index(i-1));
                 if (t.has_enemy_units()) has_enemy_units = true;
-                if (t_prev.has_enemy_units() && t.has_enemy_units()) return 0;
+                if (t_prev.has_enemy_units() && t.has_enemy_units()) return {};
             }
 
-            if (!has_enemy_units) return 0;
+            if (!has_enemy_units) return {};
 
             for (int i = 0; i < to_check.size(); ++i) {
                 Tile t = to_check.at(i);
                 Tile t_2 = to_check.at(index(i+2));
-                if (t.has_enemy_units() && t_2.owner == ME) return t.units;
+                if (t.has_enemy_units() && t_2.owner == ME) return t;
             }
 
-            return 0;
+            return {};
         };
 
         multimap<float, Tile> to_spawn;
-        multimap<int, Tile> to_build;
+        multimap<int, pair<Tile /*target*/, Tile /*enemy*/>> to_build;
         for (auto tile : my_tiles) {
             if (tile.can_spawn && !(tile.in_range_of_recycler && tile.scrap_amount == 1))
                 to_spawn.emplace(tiles_togo_count(tile), tile);
 
-            if (tile.can_build && !(tile.in_range_of_recycler && tile.scrap_amount == 1))
-                to_build.emplace(tiles_enemy_count(tile), tile);
+            if (tile.can_build && !(tile.in_range_of_recycler && tile.scrap_amount == 1)) {
+                Tile enemy_tile = tiles_enemy_count(tile);
+                if (!enemy_tile.empty())
+                    to_build.emplace(enemy_tile.units, make_pair(tile, enemy_tile));
+            }
         }
 
-        if (my_matter >= 10) {
-            for (auto it = to_build.rbegin(); it != to_build.rend(); it++) {
-                if (it->first == 0) break;
-
-                Tile tile = it->second;
-                if (tile.can_build) {
-                    ostringstream action;
-                    action << "BUILD " << tile;
-                    actions.emplace_back(action.str());
-                    my_matter -= 10;
+        unordered_set<int> enemies;
+        if (my_matter >= 20 && !to_build.empty()) {
+            int enemy = -1;
+            for (auto it = to_build.lower_bound(to_build.rbegin()->first); it != to_build.end(); it++) {
+                int enemy_number = board.number(it->second.second);
+                enemy = enemy_number;
+                if (enemies.find(enemy_number) != enemies.end()) { // Found second enemy number
+                    enemy = enemy_number;
                     break;
                 } else
-                    continue;
+                    enemies.emplace(enemy_number);
+            }
+
+            if (enemy >= 0) {
+                for (auto it = to_build.lower_bound(to_build.rbegin()->first); it != to_build.end(); it++) {
+                    if (board.number(it->second.second) == enemy) {
+                        Tile tile = it->second.first;
+                        if (tile.can_build) {
+                            ostringstream action;
+                            action << "BUILD " << tile;
+                            actions.emplace_back(action.str());
+                            my_matter -= 10;
+                        }
+                    }
+                }
             }
         }
 
         for (auto it = to_spawn.rbegin(); it != to_spawn.rend(); it++) {
             Tile tile = it->second;
-            if (my_matter >= 10) {
+            if (my_matter >= 20) {
                 ostringstream action;
                 action << "SPAWN " << 1 << " " << tile;
                 actions.emplace_back(action.str());
@@ -280,17 +295,17 @@ int main()
 
         multimap<float /* distance */, pair<int /*source*/, int /* target*/>> to_move;
         for (Tile tile : my_units) {
-            if (tile.in_range_of_recycler && tile.scrap_amount == 1) continue;
-
             int dist_enemy = board.max_distance();
             Tile closest_enemy;
             for (auto t : opp_tiles) {
+                if (tile.in_range_of_recycler && tile.scrap_amount == 1 || t.recycler) continue;
                 to_move.emplace(board.distance(tile, t), make_pair(board.number(tile), board.number(t)));
             }
 
             int dist_neutral = board.max_distance();
             Tile closest_neutral;
             for (auto t : neutral_tiles) {
+                if (tile.in_range_of_recycler && tile.scrap_amount == 1 || t.recycler) continue;
                 to_move.emplace(board.distance(tile, t, opp_units), make_pair(board.number(tile), board.number(t)));
             }
         }
