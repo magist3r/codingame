@@ -68,9 +68,10 @@ public:
                     closest_opp = tile;
                 }
             }
-            if (!closest_opp.empty() && abs(closest_opp.x - target.x) > abs(closest_opp.x - source.x)) {
-                return closest * 1. / max_distance() + dist + max_distance();
-            }
+            // That was bad without path finding :(
+            // if (!closest_opp.empty() && abs(closest_opp.x - target.x) > abs(closest_opp.x - source.x)) {
+            //     return closest * 1. / max_distance() + dist + max_distance();
+            // }
 
             return closest * 1. / max_distance() + dist;
         }
